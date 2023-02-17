@@ -4,11 +4,12 @@
 #include <chrono>
 
 int n = 10000000;
-double pi = 3.14159265359;	
+float pi = 3.14159265359;	
 
 int main() {
-	double* arr = (double*)malloc(n * sizeof(double));
-	double sum = 0;
+    auto start = std::chrono::high_resolution_clock::now();
+	float* arr = (float*)malloc(n * sizeof(double));
+	float sum = 0;
 
 #pragma acc enter data create(arr[0:n],sum)
 
@@ -21,7 +22,11 @@ int main() {
 #pragma acc parallel loop present(arr[0:n],sum) reduction(+:sum)
 	for (int i = 0; i < n; i++) sum += arr[i];
 #pragma acc exit data delete(arr[0:n]) copyout(sum)
-	printf("%0.30lf\n", sum);
+	printf("%0.30f\n", sum);
+
+    auto elapsed = std::chrono::high_resolution_clock::now() - start;
+	long long microseconds = std::chrono::duration_cast<std::chrono::microseconds>(elapsed).count();
+	printf("%lld\n", microseconds);
 
 	free(arr);
 	return 0;
