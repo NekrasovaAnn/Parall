@@ -34,3 +34,4 @@ CPU - multicore
         23894 us
 
 Наибольшая точность - GPU double. Так как этот вариант имеет почти лучшее время и лучшую точность, предлогаю выбрать его.
+https://github.com/NekrasovaAnn/Parall
