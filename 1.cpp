@@ -1,13 +1,13 @@
-#include <stdio.h>
-#include <malloc.h>
-#include <math.h>
+#include <iostream>
+#include <cmath>
 #include <chrono>
 
 int n = 10000000;
 double pi = 3.14159265359;	
 
 int main() {
-	double* arr = (double*)malloc(n * sizeof(double));
+	auto start = std::chrono::high_resolution_clock::now();
+	double* arr = new double[n];
 	double sum = 0;
 
 #pragma acc enter data create(arr[0:n],sum)
@@ -23,6 +23,10 @@ int main() {
 #pragma acc exit data delete(arr[0:n]) copyout(sum)
 	printf("%0.30lf\n", sum);
 
-	free(arr);
+	auto elapsed = std::chrono::high_resolution_clock::now() - start;
+	long long microseconds = std::chrono::duration_cast<std::chrono::microseconds>(elapsed).count();
+	printf("%lld\n", microseconds);
+
+	delete [] arr;
 	return 0;
 }
