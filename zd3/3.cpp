@@ -23,7 +23,7 @@ int main(int argc, char *argv[]) {
     acc_set_device_num(2,acc_device_default);
 
     auto start = std::chrono::high_resolution_clock::now();
-    int N = 124;
+    int N = 128;
     int num_of_iter = 1000000;
     double accuracy = 0.000001;
 
@@ -73,6 +73,7 @@ int main(int argc, char *argv[]) {
         arr2[IDX2C(i, 0, N)] = arr2[IDX2C(i-1, 0, N)] + delta;
         arr2[IDX2C(i, N - 1, N)] = arr2[IDX2C(i-1, N - 1, N)] + delta;
     }
+    
 }
 
 

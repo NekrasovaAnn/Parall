@@ -105,7 +105,13 @@ int main(int argc, char *argv[]) {
         arr2[IDX2C(i, 0, N)] = arr2[IDX2C(i-1, 0, N)] + delta;
         arr2[IDX2C(i, N - 1, N)] = arr2[IDX2C(i-1, N - 1, N)] + delta;
     }
+
+    #pragma acc loop independent collapse(2)
+        for (int i = 1; i < N - 1; ++i)
+            for (int j = 1; j < N - 1; ++j)
+                arr[IDX2C(i, j, N)] = 20.0;
 }
+    //print_array(arr, N);
 
     const double alpha = -1;
     // Инкремент для матриц, в этой задаче 1
@@ -122,9 +128,7 @@ int main(int argc, char *argv[]) {
         for (int i = 1; i < N - 1; i++){
             for (int j = 1; j < N - 1; j++){
                 arr2[IDX2C(i, j, N)] = (arr[IDX2C(i + 1, j, N)] + arr[IDX2C(i - 1, j, N)] + arr[IDX2C(i, j - 1, N)] + arr[IDX2C(i, j + 1, N)]) * 0.25;
-                //delta = std::max(delta, std::abs(arr2[IDX2C(i, j, N)] - arr[IDX2C(i, j, N)]));
-            }
-        }
+                //delta = std::max(delta, std::abs(arr2[IDX2C(i, j, N)] - arr[IDX2C(i, j, N)]));htop
         double *temp = arr;
         arr = arr2;
         arr2 = temp;
@@ -150,6 +154,7 @@ int main(int argc, char *argv[]) {
         //printf("CPU after %0.2f\n", delta);
         if (delta < accuracy) break;
     }
+    //print_array(arr, N);
 
     cublasDestroy(handle);
 #pragma acc exit data delete(arr[0:N*N],arr2[0:N*N], delta)
