@@ -12,8 +12,8 @@
 
 #define IDX2C(i, j, ld) (((j)*(ld))+(i))
 
-
-__global__ void heat_equation(double* arr, double* arr2, int N) {
+//расчет уравнения теплопроводности по блокам и потокам. Используем j-ый поток и i-ый блок при каждом расчете, принцип с четвертьюсумммой остается тем же
+__global__ void heat_equation(double* arr, double* arr2, double dt, int N) {
     size_t i = blockIdx.x;
 	size_t j = threadIdx.x;
     
@@ -23,6 +23,7 @@ __global__ void heat_equation(double* arr, double* arr2, int N) {
     }
 }
 
+//расчет ошибки по потокам, проставление его в итоговую матрицу
 __global__ void get_error(double* u, double* u_new, double* out)
 {
 	size_t idx = blockIdx.x * blockDim.x + threadIdx.x;
@@ -90,7 +91,7 @@ int main(int argc, char *argv[]) {
     int size = N*N*sizeof(double);
     double *arr = (double *)calloc(sizeof(double), size);
     double *arr2 = (double *)calloc(sizeof(double), size);
-    double *arr3 = (double *)calloc(sizeof(double), size);
+    //double *arr3 = (double *)calloc(sizeof(double), size);
 
     double delta = 10.0 / (N-1);
 
@@ -121,14 +122,59 @@ int main(int argc, char *argv[]) {
    
     size_t tempsize = 0;
     int k = 0;
-    double error = 30;
+    double error = 30.0;
+    double dt = 0.25;
 
+    //функция редукции определяет, какой размер буфера ей понадобится и записывает его в tempsize
+    //следующей же строкой - выделение памяти
     cub::DeviceReduce::Max(errortemp, tempsize, Error, deviceError, size);
     cudaMalloc((&errortemp), tempsize);
 
+    //создание графа
+    bool isGraphCreated = false;
+	cudaStream_t stream, memoryStream;
+	cudaStreamCreate(&stream);
+	cudaStreamCreate(&memoryStream);
+	cudaGraph_t graph;
+	cudaGraphExec_t instance;
+
+    //максимальный размер блока - 1024, расчет размера блока в зависимости от GPU, в blockSize будет лежать оптимальный размер сетки
+    int blockS, minGridSize;
+	int maxSize = 1024; 
+	cudaOccupancyMaxPotentialBlockSize(&minGridSize, &blockS, heat_equation, 0, maxSize);
+	dim3 blockSize(blockS, 1);
+	dim3 gridSize((N-1)/blockSize.x + 1, (N-1)/blockSize.y + 1);
+
     for (; (k < num_of_iter) && (error > accuracy); k++) { 
+
+        if (isGraphCreated) {
+			cudaGraphLaunch(instance, stream);
+			cudaStreamSynchronize(stream);
+			cudaMemcpyAsync(&Error, deviceError, sizeof(double), cudaMemcpyDeviceToHost, memoryStream);
+
+			k += 100;
+		}
+
+        else {
+            //вызов расчета функции теплопроводности на устройстве с размером сетки N-1 и таким же размером блока
+
+            cudaStreamBeginCapture(stream, cudaStreamCaptureModeGlobal);
+			for(size_t i = 0; i < 50; i++)
+			{
+				heat_equation<<<gridSize, blockSize, 0, stream>>>(Matrix, MatrixNew, dt, N);
+				heat_equation<<<gridSize, blockSize, 0, stream>>>(MatrixNew, Matrix, dt, N);
+			}
+			//вызов нахождения ошибки на устройстве с тем же размером сетки и блока
+			get_error<<<gridSize, blockSize, 0, stream>>>(Matrix, MatrixNew, Error);
+			cub::DeviceReduce::Max(errortemp, tempsize, Error, deviceError, N*N);
+	
+			cudaStreamEndCapture(stream, &graph);
+			cudaGraphInstantiate(&instance, graph, NULL, NULL, 0);
+			isGraphCreated = true;
+        }
+
         //Перезаполняем массив
-        heat_equation<<<N-1, N-1>>>(Matrix, MatrixNew, N);
+        /*heat_equation<<<N-1, N-1>>>(Matrix, MatrixNew, N);
         if(k % 10 == 0){
             //Вычисляем матрицу ошибок
             get_error<<<N, N>>>(Matrix, MatrixNew, Error);
@@ -141,7 +187,7 @@ int main(int argc, char *argv[]) {
         //Обновляем массив
         double* temp = Matrix;
         Matrix = MatrixNew;
-        MatrixNew = temp;
+        MatrixNew = temp;*/
     }
 
 //Заканчиваем считать время
@@ -154,6 +200,8 @@ int main(int argc, char *argv[]) {
 //Очищаем память
     cudaFree(Matrix);
     cudaFree(MatrixNew);
+    cudaFree(Error);
+    cudaFree(errortemp);
     free(arr);
     free(arr2);
     return 0;

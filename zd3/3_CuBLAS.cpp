@@ -51,7 +51,7 @@ int main(int argc, char *argv[]) {
     acc_set_device_num(2,acc_device_default);
 
     auto start = std::chrono::high_resolution_clock::now();
-    int N = 124;
+    int N = 128;
     int num_of_iter = 1000000;
     double accuracy = 0.000001;
 
@@ -70,7 +70,9 @@ int main(int argc, char *argv[]) {
         }
     }
 
+    // Создаем указатель на структуру, содержащую контекст
     cublasHandle_t handle;
+     // Инициализация контекста
     CUBLAS_CHECK(cublasCreate(&handle));
     
     double *arr = new double[N*N];
@@ -89,51 +91,41 @@ int main(int argc, char *argv[]) {
     arr[IDX2C(N - 1, 0, N)] = 20.0;
     arr[IDX2C(N - 1, N - 1, N)] = 30.0;
 
-    arr2[IDX2C(0, 0, N)] = 10.0;
-    arr2[IDX2C(0, N - 1, N)] = 20.0;
-    arr2[IDX2C(N - 1, 0, N)] = 20.0;
-    arr2[IDX2C(N - 1, N - 1, N)] = 30.0;
-
-
     for(int i = 1; i < N - 1; i++){
         arr[IDX2C(0, i, N)] = arr[IDX2C(0, i-1, N)] + delta;
         arr[IDX2C(N - 1, i, N)] = arr[IDX2C(N - 1, i-1, N)] + delta;
         arr[IDX2C(i, 0, N)] = arr[IDX2C(i-1, 0, N)] + delta;
         arr[IDX2C(i, N - 1, N)] = arr[IDX2C(i-1, N - 1, N)] + delta;
-        arr2[IDX2C(0, i, N)] = arr2[IDX2C(0, i-1, N)] + delta;
-        arr2[IDX2C(N - 1, i, N)] = arr2[IDX2C(N - 1, i-1, N)] + delta;
-        arr2[IDX2C(i, 0, N)] = arr2[IDX2C(i-1, 0, N)] + delta;
-        arr2[IDX2C(i, N - 1, N)] = arr2[IDX2C(i-1, N - 1, N)] + delta;
     }
-
-    #pragma acc loop independent collapse(2)
-        for (int i = 1; i < N - 1; ++i)
-            for (int j = 1; j < N - 1; ++j)
-                arr[IDX2C(i, j, N)] = 20.0;
+    memcpy(arr2, arr, N*N*sizeof(double));
 }
-    //print_array(arr, N);
 
+    // Скаляр для вычитания
     const double alpha = -1;
     // Инкремент для матриц, в этой задаче 1
     const int inc = 1;
     // Индекс максимального элемента
     int max_idx = 0;
 
+    delta = 0.0;
+#pragma acc enter data copyin(arr[0:N*N], arr2[0:N*N], delta)
     for (int t = 0; t < num_of_iter; t++){
         real_number_of_iteration = t + 1;
-        #pragma acc kernels present(delta) // !
-        delta = 0.0;
 
-#pragma acc kernels loop independent collapse(2) present(arr, arr2)
+#pragma acc kernels loop independent collapse(2) present(arr, arr2) async(1)
         for (int i = 1; i < N - 1; i++){
             for (int j = 1; j < N - 1; j++){
                 arr2[IDX2C(i, j, N)] = (arr[IDX2C(i + 1, j, N)] + arr[IDX2C(i - 1, j, N)] + arr[IDX2C(i, j - 1, N)] + arr[IDX2C(i, j + 1, N)]) * 0.25;
-                //delta = std::max(delta, std::abs(arr2[IDX2C(i, j, N)] - arr[IDX2C(i, j, N)]));htop
+            }
+        }
         double *temp = arr;
         arr = arr2;
         arr2 = temp;
 
-        #pragma acc data present(arr, arr2, arrD)
+        //if (!(t % N)){
+        #pragma acc kernels present(delta)
+            delta = 0.0;
+        #pragma acc data present(arr, arr2) deviceptr(arrD)
             {
                 #pragma acc host_data use_device(arr, arr2, arrD)
                 {
@@ -147,14 +139,15 @@ int main(int argc, char *argv[]) {
                     delta = fabs(arrD[max_idx - 1]); // Fortran moment
                 }
             }
-                    //print_array(arrD, N);
+       // }
+                    //print_array(arr, N);
                     
 //printf("CPU before %0.2f\n", delta);
-#pragma acc update host (delta)
+#pragma acc update host (delta) wait(1)
         //printf("CPU after %0.2f\n", delta);
         if (delta < accuracy) break;
     }
-    //print_array(arr, N);
+     #pragma acc wait(1)
 
     cublasDestroy(handle);
 #pragma acc exit data delete(arr[0:N*N],arr2[0:N*N], delta)
