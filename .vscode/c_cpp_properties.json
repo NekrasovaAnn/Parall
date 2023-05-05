@@ -3,7 +3,8 @@
         {
             "name": "Linux",
             "includePath": [
-                "${workspaceFolder}/**"
+                "${workspaceFolder}/**",
+                "/opt/nvidia/hpc_sdk/Linux_x86_64/22.11/cuda/11.0/targets/x86_64-linux/include/cuda_runtime.h"
             ],
             "defines": [],
             "compilerPath": "/usr/bin/clang",
