@@ -7,9 +7,6 @@
 
 #include "sub.cuh" // contains functions for processing arguments and displaying them
 
-#ifdef NVPROF_
-#include </opt/nvidia/hpc_sdk/Linux_x86_64/22.11/cuda/11.8/targets/x86_64-linux/include/nvtx3/nvToolsExt.h>
-#endif
 
 #define at(arr, x, y) (arr[(x) * (n) + (y)])
 
